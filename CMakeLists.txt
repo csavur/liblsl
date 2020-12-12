@@ -73,6 +73,7 @@ add_library(lslobj
 	src/time_receiver.h
 	src/udp_server.cpp
 	src/udp_server.h
+	src/buildinfo.cpp
         thirdparty/loguru/loguru.cpp
 	# headers
 	include/lsl_c.h
