@@ -2,8 +2,7 @@ cmake_minimum_required (VERSION 3.10)
 project (liblsl
 	VERSION 1.14.0
 	LANGUAGES C CXX
-	DESCRIPTION "Labstreaminglayer C/C++ library"
-	HOMEPAGE_URL "https://github.com/sccn/liblsl"
+        DESCRIPTION "Labstreaminglayer C/C++ library"
 	)
 
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
@@ -13,20 +12,12 @@ if(NOT MSVC_VERSION VERSION_LESS 1700)
 endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(LSL_DEBUGLOG "Enable (lots of) additional debug messages" OFF)
-option(LSL_UNIXFOLDERS "Use the unix folder layout for install targets" On)
-option(LSL_FORCE_FANCY_LIBNAME "Add library name decorations (32/64/-debug)" OFF)
-option(LSL_BUILD_EXAMPLES "Build example programs in examples/" OFF)
-option(LSL_BUILD_STATIC "Also build static LSL library." OFF)
-option(LSL_LEGACY_CPP_ABI "Build legacy C++ ABI into lsl-static" OFF)
-option(LSL_UNITTESTS "Build LSL library unit tests" OFF)
-option(LSL_BUNDLED_PUGIXML "Use the bundled pugixml by default" ON)
 
 set(LSL_WINVER "0x0601" CACHE STRING
 	"Windows version (_WIN32_WINNT) to target (defaults to 0x0601 for Windows 7)")
 
 # Add an object library so all files are only compiled once
-add_library(lslobj OBJECT
+add_library(lslobj
 	src/api_config.cpp
 	src/api_config.h
 	src/api_types.hpp
@@ -82,8 +73,7 @@ add_library(lslobj OBJECT
 	src/time_receiver.h
 	src/udp_server.cpp
 	src/udp_server.h
-	thirdparty/loguru/loguru.cpp
-	$<$<BOOL:${LSL_LEGACY_CPP_ABI}>:src/legacy/legacy_abi.cpp src/legacy/legacy_abi.h>
+        thirdparty/loguru/loguru.cpp
 	# headers
 	include/lsl_c.h
 	include/lsl_cpp.h
@@ -96,16 +86,12 @@ add_library(lslobj OBJECT
 	include/lsl/xml.h
 )
 
-if(LSL_BUNDLED_PUGIXML)
-	message(STATUS "Using bundled pugixml")
-	target_sources(lslobj PRIVATE thirdparty/pugixml/pugixml.cpp)
-	target_include_directories(lslobj
-		PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/pugixml>)
-else()
-	message(STATUS "Using system pugixml")
-	find_package(pugixml REQUIRED)
-	target_link_libraries(lslobj PRIVATE pugixml)
-endif()
+
+message(STATUS "Using bundled pugixml")
+target_sources(lslobj PRIVATE thirdparty/pugixml/pugixml.cpp)
+target_include_directories(lslobj
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/pugixml)
+
 
 # try to find out which revision is currently checked out
 find_package(Git)
@@ -129,15 +115,16 @@ else()
 	set(lslgitrevision "unknown")
 	set(lslgitbranch "unknown")
 endif()
+
 set(LSL_VERSION_INFO "git:${lslgitrevision}/branch:${lslgitbranch}/build:${CMAKE_BUILD_TYPE}/compiler:${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}")
-set_source_files_properties("thirdparty/loguru/loguru.cpp"
-	PROPERTIES COMPILE_DEFINITIONS LOGURU_STACKTRACES=$<BOOL:${LSL_DEBUGLOG}>)
 
 ## create the lslboost target
-add_library(lslboost OBJECT
+add_library(lslboost
 	lslboost/asio_objects.cpp
 	lslboost/serialization_objects.cpp
 )
+
+find_package(Threads REQUIRED)
 
 if(UNIX)
 	include(CheckSymbolExists)
@@ -145,163 +132,42 @@ if(UNIX)
 	check_symbol_exists(clock_gettime time.h HAS_GETTIME)
 	if(NOT HAS_GETTIME)
 		set(NEEDS_LIBRT ON CACHE INTERNAL "Link to librt")
-	endif()
+        endif()
+
+        target_link_libraries(lslboost  PUBLIC Threads::Threads )
+
+        target_compile_features(lslboost PUBLIC cxx_std_11 cxx_lambda_init_captures)
+
+        target_compile_definitions(lslboost PUBLIC
+            BOOST_ALL_NO_LIB
+            BOOST_ASIO_STANDALONE
+            BOOST_ASIO_SEPARATE_COMPILATION
+            BOOST_THREAD_DONT_PROVIDE_INTERRUPTIONS )
+
+        target_include_directories(lslboost PUBLIC
+                ${CMAKE_CURRENT_SOURCE_DIR}/lslboost)
+        target_link_libraries(lslobj
+                PRIVATE lslboost
+                PUBLIC dl rt )
 endif()
 
-find_package(Threads REQUIRED)
-target_link_libraries(lslboost
-	PUBLIC
-		Threads::Threads
-	PRIVATE
-		$<$<PLATFORM_ID:Windows>:bcrypt>
-		$<$<PLATFORM_ID:Windows>:mswsock>
-		$<$<PLATFORM_ID:Windows>:ws2_32>
-	)
-target_compile_features(lslboost PUBLIC cxx_std_11 cxx_lambda_init_captures)
+target_include_directories(lslobj PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/include
+        ${CMAKE_CURRENT_LIST_DIR}/thirdparty/loguru )
 
-target_compile_definitions(lslboost
-	PUBLIC
-		BOOST_ALL_NO_LIB
-		BOOST_ASIO_STANDALONE
-		BOOST_ASIO_SEPARATE_COMPILATION
-		BOOST_THREAD_DONT_PROVIDE_INTERRUPTIONS
-		$<$<PLATFORM_ID:Windows>:_WIN32_WINNT=${LSL_WINVER}>
-	PRIVATE
-		$<$<PLATFORM_ID:Windows>:BOOST_THREAD_BUILD_DLL>
-)
-target_include_directories(lslboost PUBLIC
-	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lslboost>)
-
-
-target_link_libraries(lslobj
-	PRIVATE
-		lslboost
-		$<$<PLATFORM_ID:Windows>:iphlpapi>
-		$<$<PLATFORM_ID:Windows>:winmm>
-	PUBLIC
-		$<$<AND:$<BOOL:${LSL_DEBUGLOG}>,$<PLATFORM_ID:Linux>>:dl>
-		$<$<BOOL:${NEEDS_LIBRT}>:rt>
-	)
-target_include_directories(lslobj
-	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
-	$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/thirdparty/loguru>
-)
-target_compile_definitions(lslobj
-	PRIVATE LIBLSL_EXPORTS $<$<PLATFORM_ID:Windows>:_CRT_SECURE_NO_WARNINGS>
-		LOGURU_DEBUG_LOGGING=$<BOOL:${LSL_DEBUGLOG}>
-	INTERFACE LSLNOAUTOLINK # don't use #pragma(lib) in CMake builds
-)
-
-# shared library
-add_library(lsl SHARED src/buildinfo.cpp)
-target_compile_definitions(lsl PRIVATE
-	LSL_LIBRARY_INFO_STR="${LSL_VERSION_INFO}/link:shared"
-	LIBLSL_EXPORTS)
-target_link_libraries(lsl
-	PUBLIC lslobj
-	PRIVATE lslboost)
-set_target_properties(lsl PROPERTIES
-	VERSION ${liblsl_VERSION_MAJOR}.${liblsl_VERSION_MINOR}.${liblsl_VERSION_PATCH}
+target_compile_definitions(lslobj PRIVATE
+     LOGURU_DEBUG_LOGGING=0
+     INTERFACE LSLNOAUTOLINK # don't use #pragma(lib) in CMake builds
 )
 
 set(LSL_EXPORT_TARGETS lsl lslobj lslboost)
-if(LSL_BUILD_STATIC)
-	add_library(lsl-static STATIC src/buildinfo.cpp)
-	target_compile_definitions(lsl-static PRIVATE LSL_LIBRARY_INFO_STR="${LSL_VERSION_INFO}/link:static")
-	target_link_libraries(lsl-static PUBLIC lslobj PRIVATE lslboost)
-	list(APPEND LSL_EXPORT_TARGETS lsl-static)
-	# for LSL_CPP_API export header
-	target_compile_definitions(lsl-static PUBLIC LIBLSL_STATIC)
-endif()
 
-if(LSL_FORCE_FANCY_LIBNAME)
-	math(EXPR lslplatform "8 * ${CMAKE_SIZEOF_VOID_P}")
-	set_target_properties(lsl PROPERTIES
-		PREFIX ""
-		OUTPUT_NAME "liblsl${lslplatform}"
-		DEBUG_POSTFIX "-debug"
-	)
-	if(LSL_BUILD_STATIC)
-		set_target_properties(lsl-static PROPERTIES
-			PREFIX ""
-			OUTPUT_NAME "liblsl${lslplatform}-static"
-			DEBUG_POSTFIX "-debug"
-		)
-	endif()
-endif()
-
-if(LSL_UNIXFOLDERS)
-	include(GNUInstallDirs)
-else()
-	set(CMAKE_INSTALL_BINDIR LSL)
-	set(CMAKE_INSTALL_LIBDIR LSL)
-	set(CMAKE_INSTALL_INCLUDEDIR LSL/include)
-	set(CMAKE_INSTALL_DATAROOTDIR LSL/share)
-endif()
-
-include(CMakePackageConfigHelpers)
-write_basic_package_version_file(
-	"${CMAKE_CURRENT_BINARY_DIR}/LSLConfigVersion.cmake"
-	VERSION "${liblsl_VERSION_MAJOR}.${liblsl_VERSION_MINOR}.${liblsl_VERSION_PATCH}"
-	COMPATIBILITY AnyNewerVersion
-)
-
-install(TARGETS ${LSL_EXPORT_TARGETS}
-	EXPORT LSLTargets
-	COMPONENT liblsl
-	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-	INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
-
-export(EXPORT LSLTargets
-	FILE "${CMAKE_CURRENT_BINARY_DIR}/LSLTargets.cmake"
-	NAMESPACE LSL::
-)
-
-install(EXPORT LSLTargets
-	FILE LSLTargets.cmake
-	COMPONENT liblsl
-	NAMESPACE "LSL::"
-	DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/LSL
-)
-configure_file(cmake/LSLConfig.cmake "${CMAKE_CURRENT_BINARY_DIR}/LSLConfig.cmake" COPYONLY)
-configure_file(cmake/LSLCMake.cmake "${CMAKE_CURRENT_BINARY_DIR}/LSLCMake.cmake" COPYONLY)
+add_library(lsl-static STATIC src/buildinfo.cpp)
+target_compile_definitions(lsl-static PRIVATE LSL_LIBRARY_INFO_STR="${LSL_VERSION_INFO}/link:static")
+target_link_libraries(lsl-static PUBLIC lslobj PRIVATE lslboost)
+list(APPEND LSL_EXPORT_TARGETS lsl-static)
+# for LSL_CPP_API export header
+target_compile_definitions(lsl-static PUBLIC LIBLSL_STATIC)
 
 
-# install headers
-install(DIRECTORY include/
-	DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-	COMPONENT liblsl
-)
 
-install(FILES
-	cmake/LSLCMake.cmake
-	${CMAKE_CURRENT_BINARY_DIR}/LSLConfig.cmake
-	${CMAKE_CURRENT_BINARY_DIR}/LSLConfigVersion.cmake
-	COMPONENT liblsl
-	DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/LSL
-)
-
-include(cmake/LSLCMake.cmake)
-
-add_executable(lslver testing/lslver.c)
-target_link_libraries(lslver PRIVATE lsl)
-installLSLApp(lslver)
-if(LSL_BUILD_STATIC)
-	add_executable(lslver-static testing/lslver.c)
-	target_link_libraries(lslver-static PRIVATE lsl-static)
-	installLSLApp(lslver-static)
-endif()
-
-set(LSL_INSTALL_ROOT ${CMAKE_CURRENT_BINARY_DIR})
-if(LSL_UNITTESTS)
-	add_subdirectory(testing)
-endif()
-
-if(LSL_BUILD_EXAMPLES)
-	add_subdirectory(examples)
-endif()
-
-LSLGenerateCPackConfig()
