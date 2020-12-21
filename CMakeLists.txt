@@ -17,7 +17,7 @@ set(LSL_WINVER "0x0601" CACHE STRING
 	"Windows version (_WIN32_WINNT) to target (defaults to 0x0601 for Windows 7)")
 
 # Add an object library so all files are only compiled once
-add_library(lslobj
+add_library(lslobj STATIC
 	src/api_config.cpp
 	src/api_config.h
 	src/api_types.hpp
@@ -120,7 +120,7 @@ endif()
 set(LSL_VERSION_INFO "git:${lslgitrevision}/branch:${lslgitbranch}/build:${CMAKE_BUILD_TYPE}/compiler:${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}")
 
 ## create the lslboost target
-add_library(lslboost
+add_library(lslboost STATIC
 	lslboost/asio_objects.cpp
 	lslboost/serialization_objects.cpp
 )
@@ -135,7 +135,7 @@ if(UNIX)
 		set(NEEDS_LIBRT ON CACHE INTERNAL "Link to librt")
         endif()
 
-        target_link_libraries(lslboost  PUBLIC Threads::Threads )
+        target_link_libraries(lslboost PUBLIC Threads::Threads )
 
         target_compile_features(lslboost PUBLIC cxx_std_11 cxx_lambda_init_captures)
 
