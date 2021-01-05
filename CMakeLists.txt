@@ -152,6 +152,51 @@ if(UNIX)
                 PUBLIC dl rt )
 endif()
 
+if(WIN32)
+	target_link_libraries(lslboost
+		PUBLIC
+			Threads::Threads
+		PRIVATE
+			$<$<PLATFORM_ID:Windows>:bcrypt>
+			$<$<PLATFORM_ID:Windows>:mswsock>
+			$<$<PLATFORM_ID:Windows>:ws2_32>
+		)
+	target_compile_features(lslboost PUBLIC cxx_std_11 cxx_lambda_init_captures)
+
+	target_compile_definitions(lslboost
+		PUBLIC
+			BOOST_ALL_NO_LIB
+			BOOST_ASIO_STANDALONE
+			BOOST_ASIO_SEPARATE_COMPILATION
+			BOOST_THREAD_DONT_PROVIDE_INTERRUPTIONS
+			$<$<PLATFORM_ID:Windows>:_WIN32_WINNT=${LSL_WINVER}>
+		PRIVATE
+			$<$<PLATFORM_ID:Windows>:BOOST_THREAD_BUILD_DLL>
+	)
+	target_include_directories(lslboost PUBLIC
+		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lslboost>)
+
+
+	target_link_libraries(lslobj
+		PRIVATE
+			lslboost
+			$<$<PLATFORM_ID:Windows>:iphlpapi>
+			$<$<PLATFORM_ID:Windows>:winmm>
+		PUBLIC
+			$<$<AND:$<BOOL:${LSL_DEBUGLOG}>,$<PLATFORM_ID:Linux>>:dl>
+			$<$<BOOL:${NEEDS_LIBRT}>:rt>
+		)
+	target_include_directories(lslobj
+		PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
+		$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/thirdparty/loguru>
+	)
+	target_compile_definitions(lslobj
+		PRIVATE LIBLSL_EXPORTS $<$<PLATFORM_ID:Windows>:_CRT_SECURE_NO_WARNINGS>
+			LOGURU_DEBUG_LOGGING=$<BOOL:${LSL_DEBUGLOG}>
+		INTERFACE LSLNOAUTOLINK # don't use #pragma(lib) in CMake builds
+	)
+endif()
+
 target_include_directories(lslobj PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/include
         ${CMAKE_CURRENT_LIST_DIR}/thirdparty/loguru )
